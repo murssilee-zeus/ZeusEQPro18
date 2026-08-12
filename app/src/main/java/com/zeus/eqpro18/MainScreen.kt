@@ -261,4 +261,37 @@ fun CrossoverSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
                 Text("Band ${idx + 1} →", color = Color(0xFFCCCCCC), modifier = Modifier.width(80.dp))
                 EditableParam(label = "FREQ", value = freq, unit = "Hz", min = 20f, max = 20000f,
-                    format = { if (it >= 1000) "%.1fk".
+                    format = { if (it >= 1000) "%.1fk".format(it / 1000) else "%.0f".format(it) },
+                    onValueChange = { viewModel.crossoverFrequencies[idx] = it }, accent = Color(0xFF74B9FF))
+            }
+        }
+    }
+}
+
+@Composable
+fun LimiterSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF12121A)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Text("Limiter", color = Color(0xFFFFF3B0), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Switch(checked = viewModel.limiterEnabled, onCheckedChange = { viewModel.limiterEnabled = it },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFE17055)))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            EditableParam(label = "THRESH", value = viewModel.limiterThreshold, unit = "dB", min = -30f, max = 0f,
+                format = { "%.1f".format(it) }, onValueChange = { viewModel.limiterThreshold = it }, accent = Color(0xFFE17055))
+            EditableParam(label = "ATTACK", value = viewModel.limiterAttack, unit = "ms", min = 0.1f, max = 100f,
+                format = { "%.1f".format(it) }, onValueChange = { viewModel.limiterAttack = it }, accent = Color(0xFFE17055))
+            EditableParam(label = "RELEASE", value = viewModel.limiterRelease, unit = "ms", min = 1f, max = 500f,
+                format = { "%.0f".format(it) }, onValueChange = { viewModel.limiterRelease = it }, accent = Color(0xFFE17055))
+            EditableParam(label = "RATIO", value = viewModel.limiterRatio, unit = ":1", min = 1f, max = 20f,
+                format = { "%.1f".format(it) }, onValueChange = { viewModel.limiterRatio = it }, accent = Color(0xFFE17055))
+            EditableParam(label = "POST", value = viewModel.limiterPostGain, unit = "dB", min = -12f, max = 12f,
+                format = { "%+.1f".format(it) }, onValueChange = { viewModel.limiterPostGain = it }, accent = Color(0xFFE17055))
+        }
+        Text("El limitador usa DynamicsProcessing.Limiter nativo de Android", color = Color(0xFF666677), fontSize = 12.sp,
+            modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
+}
