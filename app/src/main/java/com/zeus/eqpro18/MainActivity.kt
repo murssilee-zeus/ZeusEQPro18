@@ -76,4 +76,84 @@ class MainActivity : ComponentActivity() {
                 viewModel.limiterThreshold,
                 viewModel.limiterAttack,
                 viewModel.limiterRelease,
-                view
+                viewModel.limiterRatio,
+                viewModel.limiterPostGain
+            ) {
+                audioService?.audioEngine?.setLimiter(
+                    enabled = viewModel.limiterEnabled,
+                    threshold = viewModel.limiterThreshold,
+                    attack = viewModel.limiterAttack,
+                    release = viewModel.limiterRelease,
+                    ratio = viewModel.limiterRatio,
+                    postGain = viewModel.limiterPostGain
+                )
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color(0xFF0D0D12)
+            ) {
+                MainScreen(
+                    viewModel = viewModel,
+                    onToggleEngine = {
+                        toggleEngine(viewModel)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun toggleEngine(viewModel: EqViewModel) {
+        if (viewModel.isEngineRunning) {
+            audioService?.audioEngine?.setEnabled(false)
+            stopService(Intent(this, AudioEngineService::class.java))
+            if (bound) {
+                unbindService(connection)
+                bound = false
+            }
+            viewModel.isEngineRunning = false
+        } else {
+            val intent = Intent(this, AudioEngineService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            viewModel.isEngineRunning = true
+            Toast.makeText(this, "Zeus EQ Pro18 activado", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestNeededPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val toRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (toRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(toRequest.toTypedArray())
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Intent(this, AudioEngineService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (bound) {
+            unbindService(connection)
+            bound = false
+        }
+    }
+}
