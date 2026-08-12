@@ -28,6 +28,7 @@ jobs:
       - name: Create Gradle Wrapper
         run: |
           if [ ! -f "./gradlew" ]; then
+            echo "Generando Gradle Wrapper..."
             gradle wrapper --gradle-version 8.7 || true
           fi
           chmod +x ./gradlew 2>/dev/null || true
