@@ -1,7 +1,6 @@
 package com.zeus.eqpro18
 
 import android.content.Context
-import android.media.AudioManager
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Visualizer
 import android.util.Log
@@ -83,7 +82,7 @@ class AudioEngine(private val context: Context) {
             }
 
             isEnabled = true
-            Log.i(TAG, "DynamicsProcessing initialized successfully (session=$audioSessionId)")
+            Log.i(TAG, "DynamicsProcessing initialized (session=$audioSessionId)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize DynamicsProcessing: ${e.message}", e)
@@ -122,9 +121,7 @@ class AudioEngine(private val context: Context) {
             applyBand(band, index)
         }
         try {
-            for (ch in 0 until CHANNEL_COUNT) {
-                dp.setInputGainByChannelIndex(ch, preGain)
-            }
+            dp.setInputGainAllChannelsTo(preGain)
         } catch (e: Exception) {
             Log.w(TAG, "setInputGain failed: ${e.message}")
         }
@@ -141,6 +138,7 @@ class AudioEngine(private val context: Context) {
             val preEqBand = DynamicsProcessing.EqBand(true, freq, gain)
             dp.setPreEqBandAllChannelsTo(index, preEqBand)
 
+            // MbcBand: enabled, cutoffFrequency, attackTime, releaseTime, ratio, threshold, kneeWidth, noiseGateThreshold, expanderRatio, preGain, postGain
             val mbcBand = DynamicsProcessing.MbcBand(
                 true,
                 freq,
@@ -151,7 +149,8 @@ class AudioEngine(private val context: Context) {
                 0f,
                 0f,
                 0f,
-                gain
+                gain,
+                0f
             )
             dp.setMbcBandAllChannelsTo(index, mbcBand)
 
@@ -162,13 +161,9 @@ class AudioEngine(private val context: Context) {
 
     fun setPreGain(gainDb: Float) {
         preGain = gainDb.coerceIn(-30f, 30f)
-        dynamicsProcessing?.let { dp ->
-            for (ch in 0 until CHANNEL_COUNT) {
-                try {
-                    dp.setInputGainByChannelIndex(ch, preGain)
-                } catch (_: Exception) {}
-            }
-        }
+        try {
+            dynamicsProcessing?.setInputGainAllChannelsTo(preGain)
+        } catch (_: Exception) {}
     }
 
     fun setLimiter(
