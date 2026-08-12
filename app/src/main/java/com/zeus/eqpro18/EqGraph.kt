@@ -5,12 +5,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -20,6 +28,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import kotlin.math.*
 
+// ==========================================
+// 1. GRAFICO DE EQUALIZADOR Y CROSSOVER
+// ==========================================
 @Composable
 fun EqGraph(
     bands: List<EqBand>,
@@ -29,8 +40,8 @@ fun EqGraph(
     onBandMoved: (Int, frequency: Float, gain: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val minFreq = 1f
-    val maxFreq = 30000f
+    val minFreq = 20f
+    val maxFreq = 20000f
     val minGain = -30f
     val maxGain = 30f
 
@@ -70,11 +81,11 @@ fun EqGraph(
         }
     }
 
-    Box(modifier = modifier.background(Color(0xFF0D0D12)).padding(4.dp)) {
+    Box(modifier = modifier.background(Color(0xFF0F0F14)).padding(4.dp)) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(bands, selectedIndex) {
+                .pointerInput(bands) {
                     detectTapGestures { offset ->
                         var closest = -1
                         var minDist = Float.MAX_VALUE
@@ -95,26 +106,32 @@ fun EqGraph(
                         change.consume()
                         val freq = xToFreq(change.position.x, size.width.toFloat())
                         val gain = yToGain(change.position.y, size.height.toFloat())
-                        onBandMoved(selectedIndex, freq, gain)
+                        if (selectedIndex in bands.indices) {
+                            onBandMoved(selectedIndex, freq, gain)
+                        }
                     }
                 }
         ) {
             val w = size.width
             val h = size.height
-            val gridColor = Color(0xFF2A2A35)
+            val gridColor = Color(0xFF22222D)
 
-            for (db in -30..30 step 6) {
+            // Cuadrícula horizontal (dB)
+            for (db in -30..30 step 10) {
                 val y = gainToY(db.toFloat(), h)
                 drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
             }
-            listOf(10f, 20f, 50f, 100f, 200f, 500f, 1000f, 2000f, 5000f, 10000f, 20000f).forEach { f ->
+
+            // Guías de frecuencia logarítmicas
+            listOf(20f, 100f, 1000f, 10000f, 20000f).forEach { f ->
                 val x = freqToX(f, w)
                 drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
             }
 
             val zeroY = gainToY(0f, h)
-            drawLine(Color(0xFF4A4A5A), Offset(0f, zeroY), Offset(w, zeroY), strokeWidth = 1.5f)
+            drawLine(Color(0xFF38384A), Offset(0f, zeroY), Offset(w, zeroY), strokeWidth = 1.5f)
 
+            // Espectro FFT
             if (spectrum.isNotEmpty()) {
                 val spectrumPath = Path()
                 spectrumPath.moveTo(0f, h)
@@ -126,9 +143,10 @@ fun EqGraph(
                 }
                 spectrumPath.lineTo(w, h)
                 spectrumPath.close()
-                drawPath(spectrumPath, brush = Brush.verticalGradient(listOf(Color(0x3340A0C0), Color(0x1140A0C0))))
+                drawPath(spectrumPath, brush = Brush.verticalGradient(listOf(Color(0x3340A0C0), Color(0x0540A0C0))))
             }
 
+            // Dibujado de curvas por banda
             bands.forEachIndexed { idx, band ->
                 if (!band.enabled) return@forEachIndexed
                 val path = Path()
@@ -152,12 +170,13 @@ fun EqGraph(
                 }
                 fillPath.lineTo(freqToX(maxFreq, w), zeroY)
                 fillPath.close()
-                val alpha = if (idx == selectedIndex) 0.35f else 0.18f
+                val alpha = if (idx == selectedIndex) 0.30f else 0.12f
                 drawPath(fillPath, band.color.copy(alpha = alpha))
-                drawPath(path, band.color.copy(alpha = if (idx == selectedIndex) 1f else 0.7f),
-                    style = Stroke(width = if (idx == selectedIndex) 3f else 2f, cap = StrokeCap.Round))
+                drawPath(path, band.color.copy(alpha = if (idx == selectedIndex) 1f else 0.6f),
+                    style = Stroke(width = if (idx == selectedIndex) 3f else 1.8f, cap = StrokeCap.Round))
             }
 
+            // Curva global combinada
             val combinedPath = Path()
             val n = responsePoints.size
             for (i in 0 until n) {
@@ -166,20 +185,92 @@ fun EqGraph(
                 val y = gainToY(responsePoints[i], h)
                 if (i == 0) combinedPath.moveTo(x, y) else combinedPath.lineTo(x, y)
             }
-            drawPath(combinedPath, Color(0xFFFFF3B0).copy(alpha = 0.9f), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
+            drawPath(combinedPath, Color(0xFFFFF3B0).copy(alpha = 0.95f), style = Stroke(width = 2.5f, cap = StrokeCap.Round))
 
+            // Dibujado de marcadores en forma de triángulo estilo Crossover
             bands.forEachIndexed { idx, band ->
                 val x = freqToX(band.frequency, w)
                 val y = gainToY(band.gain, h)
-                val radius = if (idx == selectedIndex) 14f else 10f
-                drawCircle(band.color.copy(alpha = 0.3f), radius = radius + 6f, center = Offset(x, y))
-                drawCircle(color = if (band.enabled) band.color else Color.Gray, radius = radius, center = Offset(x, y))
-                drawCircle(Color.White.copy(alpha = 0.9f), radius = radius * 0.35f, center = Offset(x, y))
+                val isSelected = (idx == selectedIndex)
+                
+                val trianglePath = Path().apply {
+                    val side = if (isSelected) 28f else 22f
+                    moveTo(x, y - side / 2f)
+                    lineTo(x - side / 2f, y + side / 2f)
+                    lineTo(x + side / 2f, y + side / 2f)
+                    close()
+                }
+
+                drawPath(trianglePath, color = if (band.enabled) band.color else Color.Gray)
+                if (isSelected) {
+                    drawPath(trianglePath, color = Color.White, style = Stroke(width = 2.5f))
+                }
             }
         }
     }
 }
 
+// ==========================================
+// 2. VÚMETRO Y PANEL DEL LIMITADOR (GR & CEILING)
+// ==========================================
+@Composable
+fun LimiterMetersGraph(
+    ceilingDb: Float,
+    gainReductionDb: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(Color(0xFF141419))
+            .padding(8.dp)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val barWidth = w * 0.35f
+            val spacing = w * 0.1f
+
+            // 1. Barra Ceiling (Nivel Techo)
+            val ceilingNorm = ((ceilingDb + 30f) / 30f).coerceIn(0f, 1f)
+            val ceilingBarH = ceilingNorm * h
+            
+            // Fondo barra
+            drawRect(
+                color = Color(0xFF22222A),
+                topLeft = Offset(0f, 0f),
+                size = Size(barWidth, h)
+            )
+            // Indicador activo Ceiling
+            drawRect(
+                color = Color(0xFF43A047),
+                topLeft = Offset(0f, h - ceilingBarH),
+                size = Size(barWidth, ceilingBarH)
+            )
+
+            // 2. Barra GR (Gain Reduction)
+            val grNorm = (abs(gainReductionDb.coerceIn(-30f, 0f)) / 30f).coerceIn(0f, 1f)
+            val grBarH = grNorm * h
+
+            val grX = barWidth + spacing
+            // Fondo barra GR
+            drawRect(
+                color = Color(0xFF22222A),
+                topLeft = Offset(grX, 0f),
+                size = Size(barWidth, h)
+            )
+            // Atenuación atajada por el limitador (cae desde arriba)
+            drawRect(
+                color = Color(0xFFE53935),
+                topLeft = Offset(grX, 0f),
+                size = Size(barWidth, grBarH)
+            )
+        }
+    }
+}
+
+// ==========================================
+// MATEMÁTICA DE RESPUESTA EN FRECUENCIA
+// ==========================================
 fun calculateBandResponse(freq: Float, band: EqBand): Float {
     if (!band.enabled || band.gain == 0f) return 0f
     val f0 = band.frequency
