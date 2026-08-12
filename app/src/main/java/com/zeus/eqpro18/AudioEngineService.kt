@@ -72,4 +72,21 @@ class AudioEngineService : Service() {
             .setContentTitle("Zeus EQ Pro18")
             .setContentText(getString(R.string.service_running))
             .setSmallIcon(R.drawable.ic_eq_tile)
-            .setContentIntent
+            .setContentIntent(pending)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+    }
+
+    fun updateNotification(text: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Zeus EQ Pro18")
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_eq_tile)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.notify(NOTIFICATION_ID, notification)
+    }
+}
