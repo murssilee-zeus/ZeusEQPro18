@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zeus EQ Pro18</string>
+    <string name="eq_section">Equalizer Pro18</string>
+    <string name="crossover_section">Crossover Multiband</string>
+    <string name="limiter_section">Limiter</string>
+    <string name="service_channel">Zeus EQ Service</string>
+    <string name="service_running">Zeus EQ Pro18 activo</string>
+</resources>
