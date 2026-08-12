@@ -1,8 +1,10 @@
-name: Build Zeus EQ Pro18 APK
+name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -10,40 +12,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            ffmpeg \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixin-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            zlib1g-dev \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            cmake \
+            openjdk-17-jdk \
+            zip \
+            unzip
+
+      - name: Set up Java JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Create Gradle Wrapper
+      - name: Install Buildozer & Cython
         run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "Generando Gradle Wrapper..."
-            gradle wrapper --gradle-version 8.7 || true
-          fi
-          chmod +x ./gradlew 2>/dev/null || true
+          python -m pip install --upgrade pip
+          pip install --upgrade buildozer cython
 
-      - name: Build Debug APK
+      - name: Accept Android SDK Licenses Automatically
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --stacktrace --no-daemon
-          else
-            gradle assembleDebug --stacktrace --no-daemon
-          fi
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | buildozer android update || true
 
-      - name: Upload APK
+      - name: Build APK with Buildozer
+        run: |
+          yes | buildozer -v android debug
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZeusEQPro18-debug
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          name: ZeusEQPro18-APK
+          path: bin/*.apk
