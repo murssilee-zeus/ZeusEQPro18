@@ -1,8 +1,8 @@
 name: Build Zeus EQ Pro18 APK
-
 on:
-  workflow_dispatch:   # Solo manual, no en cada push
-
+   push:
+     branches: [ main, master ]
+   workflow_dispatch:   # Permite ejecutarlo manualmente desde la pestaña Actions
 jobs:
   build:
     runs-on: ubuntu-latest
