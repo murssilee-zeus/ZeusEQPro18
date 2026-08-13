@@ -14,6 +14,10 @@ enum class EqSection {
 
 class EqViewModel : ViewModel() {
 
+    companion object {
+        const val MAX_BANDS = 18
+    }
+
     val bands = mutableStateListOf<EqBand>().apply {
         addAll(createDefaultBands())
     }
@@ -24,16 +28,18 @@ class EqViewModel : ViewModel() {
     var currentSection by mutableStateOf(EqSection.EQUALIZER)
         private set
 
+    // Preamp
+    var preamp by mutableFloatStateOf(-3.0f)
+
+    // Limiter
     var limiterEnabled by mutableStateOf(true)
-    var limiterThreshold by mutableFloatStateOf(-1.0f)
+    var limiterThreshold by mutableFloatStateOf(-1.5f)
     var limiterAttack by mutableFloatStateOf(1.0f)
     var limiterRelease by mutableFloatStateOf(60f)
-    var limiterRatio by mutableFloatStateOf(10f)
+    var limiterRatio by mutableFloatStateOf(12f)
     var limiterPostGain by mutableFloatStateOf(0f)
 
     var crossoverFrequencies = mutableStateListOf(200f, 2000f, 8000f)
-
-    var masterGain by mutableFloatStateOf(0f)
 
     var isEngineRunning by mutableStateOf(false)
 
@@ -60,6 +66,31 @@ class EqViewModel : ViewModel() {
             enabled = enabled ?: current.enabled,
             filterType = filterType ?: current.filterType
         )
+    }
+
+    /** Agrega una banda nueva (máximo 18) */
+    fun addBand() {
+        if (bands.size >= MAX_BANDS) return
+        val newId = (bands.maxOfOrNull { it.id } ?: -1) + 1
+        // Frecuencia por defecto: interpolar entre existentes o 1 kHz
+        val newFreq = when {
+            bands.isEmpty() -> 1000f
+            else -> {
+                val last = bands.last().frequency
+                (last * 1.8f).coerceIn(1f, 30000f)
+            }
+        }
+        bands.add(createNewBand(newId, newFreq))
+        selectedBandIndex = bands.lastIndex
+    }
+
+    /** Quita la banda seleccionada (mínimo 1) */
+    fun removeSelectedBand() {
+        if (bands.size <= 1) return
+        val idx = selectedBandIndex
+        if (idx !in bands.indices) return
+        bands.removeAt(idx)
+        selectedBandIndex = idx.coerceIn(0, bands.lastIndex)
     }
 
     fun nextSection() {
