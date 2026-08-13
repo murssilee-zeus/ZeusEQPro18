@@ -1,5 +1,6 @@
 package com.zeus.eqpro18
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,8 +23,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -33,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.*
 
 @Composable
 fun MainScreen(
@@ -48,7 +54,6 @@ fun MainScreen(
             .background(Color(0xFF0D0D12))
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        // TOP BAR
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -117,7 +122,7 @@ fun MainScreen(
                 )
             }
             EqSection.CROSSOVER -> {
-                CrossoverSection(viewModel, Modifier.weight(1f).fillMaxWidth())
+                MultibandCompressorSection(viewModel, Modifier.weight(1f).fillMaxWidth())
             }
             EqSection.LIMITER -> {
                 LimiterSection(viewModel, Modifier.weight(1f).fillMaxWidth())
@@ -127,7 +132,6 @@ fun MainScreen(
         if (viewModel.currentSection == EqSection.EQUALIZER && band != null) {
             Spacer(Modifier.height(6.dp))
 
-            // PREAMP
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -148,11 +152,7 @@ fun MainScreen(
                     onValueChange = { viewModel.preamp = it },
                     accent = Color(0xFFFFF3B0)
                 )
-                Text(
-                    "Headroom auto",
-                    color = Color(0xFF555566),
-                    fontSize = 10.sp
-                )
+                Text("Headroom auto", color = Color(0xFF555566), fontSize = 10.sp)
             }
 
             Spacer(Modifier.height(6.dp))
@@ -171,7 +171,6 @@ fun MainScreen(
 
             Spacer(Modifier.height(6.dp))
 
-            // SELECTOR DE BANDAS (scroll horizontal)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -225,7 +224,6 @@ private fun BandControls(
             .background(Color(0xFF16161E))
             .padding(8.dp)
     ) {
-        // Filter types
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -260,7 +258,6 @@ private fun BandControls(
             }
         }
 
-        // Params + add/remove
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -279,60 +276,36 @@ private fun BandControls(
             }
 
             EditableParam(
-                label = "FREQ",
-                value = band.frequency,
-                unit = "Hz",
-                min = 1f,
-                max = 30000f,
-                format = { v ->
-                    if (v >= 1000f) String.format("%.1fk", v / 1000f)
-                    else String.format("%.0f", v)
-                },
-                onValueChange = onFrequencyChange,
-                accent = band.color
+                label = "FREQ", value = band.frequency, unit = "Hz",
+                min = 1f, max = 30000f,
+                format = { v -> if (v >= 1000f) String.format("%.1fk", v / 1000f) else String.format("%.0f", v) },
+                onValueChange = onFrequencyChange, accent = band.color
             )
-
             EditableParam(
-                label = "GAIN",
-                value = band.gain,
-                unit = "dB",
-                min = -30f,
-                max = 30f,
+                label = "GAIN", value = band.gain, unit = "dB",
+                min = -30f, max = 30f,
                 format = { v -> String.format("%+.1f", v) },
-                onValueChange = onGainChange,
-                accent = band.color
+                onValueChange = onGainChange, accent = band.color
             )
-
             EditableParam(
-                label = "Q",
-                value = band.q,
-                unit = "",
-                min = 0.1f,
-                max = 40f,
+                label = "Q", value = band.q, unit = "",
+                min = 0.1f, max = 40f,
                 format = { v -> String.format("%.2f", v) },
-                onValueChange = onQChange,
-                accent = band.color
+                onValueChange = onQChange, accent = band.color
             )
 
-            // + / - bandas
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 IconButton(
                     onClick = onRemoveBand,
                     enabled = bandCount > 1,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF2A2A35))
+                    modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF2A2A35))
                 ) {
                     Icon(Icons.Default.Remove, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 IconButton(
                     onClick = onAddBand,
                     enabled = bandCount < EqViewModel.MAX_BANDS,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF2A2A35))
+                    modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF2A2A35))
                 ) {
                     Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
@@ -364,7 +337,12 @@ fun EditableParam(
         if (editing) {
             BasicTextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = { new ->
+                    // Permite números, punto y signo menos
+                    if (new.isEmpty() || new == "-" || new.matches(Regex("-?\\d*\\.?\\d*"))) {
+                        text = new
+                    }
+                },
                 textStyle = TextStyle(
                     color = Color.White,
                     fontSize = 14.sp,
@@ -411,41 +389,125 @@ fun EditableParam(
 }
 
 @Composable
-fun CrossoverSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
+fun MultibandCompressorSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF12121A))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(12.dp)
     ) {
-        Text("Crossover Multiband", color = Color(0xFFFFF3B0), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Frecuencias de corte configurables",
-            color = Color(0xFFAAAAAA),
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(24.dp))
-        viewModel.crossoverFrequencies.forEachIndexed { idx, freq ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 6.dp)
-            ) {
-                Text("Band ${idx + 1}", color = Color(0xFFCCCCCC), modifier = Modifier.width(80.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Compresor Multibanda", color = Color(0xFFFFF3B0), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Switch(
+                checked = viewModel.mbcEnabled,
+                onCheckedChange = { viewModel.mbcEnabled = it },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF74B9FF))
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Gráfica simple de compresión (curvas de ratio)
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF0D0D12))
+                .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(8.dp))
+        ) {
+            val w = size.width
+            val h = size.height
+            // Grid
+            for (i in 0..4) {
+                val y = h * i / 4f
+                drawLine(Color(0xFF2A2A35), Offset(0f, y), Offset(w, y), 1f)
+            }
+            // Curvas de compresión por banda (Low / Mid / High)
+            fun drawCurve(ratio: Float, color: Color) {
+                val path = Path()
+                for (i in 0..100) {
+                    val x = w * i / 100f
+                    val input = -40f + 40f * i / 100f // -40 a 0 dB
+                    val thresh = -18f
+                    val output = if (input < thresh) input
+                    else thresh + (input - thresh) / ratio
+                    val y = h - ((output + 40f) / 40f) * h
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, color, style = Stroke(2f, cap = StrokeCap.Round))
+            }
+            drawCurve(viewModel.mbcLowRatio, Color(0xFFFF6B6B))
+            drawCurve(viewModel.mbcMidRatio, Color(0xFF55EFC4))
+            drawCurve(viewModel.mbcHighRatio, Color(0xFF74B9FF))
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Frecuencias de cruce
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            EditableParam(
+                label = "LOW|MID", value = viewModel.mbcLowFreq, unit = "Hz",
+                min = 20f, max = 2000f,
+                format = { v -> String.format("%.0f", v) },
+                onValueChange = { viewModel.mbcLowFreq = it }, accent = Color(0xFFFF6B6B)
+            )
+            EditableParam(
+                label = "MID|HIGH", value = viewModel.mbcHighFreq, unit = "Hz",
+                min = 500f, max = 12000f,
+                format = { v -> if (v >= 1000f) String.format("%.1fk", v / 1000f) else String.format("%.0f", v) },
+                onValueChange = { viewModel.mbcHighFreq = it }, accent = Color(0xFF74B9FF)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Controles por banda
+        listOf(
+            Triple("LOW", Color(0xFFFF6B6B), listOf(
+                { viewModel.mbcLowThreshold } to { v: Float -> viewModel.mbcLowThreshold = v },
+                { viewModel.mbcLowRatio } to { v: Float -> viewModel.mbcLowRatio = v },
+                { viewModel.mbcLowAttack } to { v: Float -> viewModel.mbcLowAttack = v },
+                { viewModel.mbcLowRelease } to { v: Float -> viewModel.mbcLowRelease = v }
+            )),
+            Triple("MID", Color(0xFF55EFC4), listOf(
+                { viewModel.mbcMidThreshold } to { v: Float -> viewModel.mbcMidThreshold = v },
+                { viewModel.mbcMidRatio } to { v: Float -> viewModel.mbcMidRatio = v },
+                { viewModel.mbcMidAttack } to { v: Float -> viewModel.mbcMidAttack = v },
+                { viewModel.mbcMidRelease } to { v: Float -> viewModel.mbcMidRelease = v }
+            )),
+            Triple("HIGH", Color(0xFF74B9FF), listOf(
+                { viewModel.mbcHighThreshold } to { v: Float -> viewModel.mbcHighThreshold = v },
+                { viewModel.mbcHighRatio } to { v: Float -> viewModel.mbcHighRatio = v },
+                { viewModel.mbcHighAttack } to { v: Float -> viewModel.mbcHighAttack = v },
+                { viewModel.mbcHighRelease } to { v: Float -> viewModel.mbcHighRelease = v }
+            ))
+        ).forEach { (name, color, params) ->
+            Text(name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 EditableParam(
-                    label = "FREQ",
-                    value = freq,
-                    unit = "Hz",
-                    min = 20f,
-                    max = 20000f,
-                    format = { v ->
-                        if (v >= 1000f) String.format("%.1fk", v / 1000f)
-                        else String.format("%.0f", v)
-                    },
-                    onValueChange = { viewModel.crossoverFrequencies[idx] = it },
-                    accent = Color(0xFF74B9FF)
+                    label = "THRESH", value = params[0].first(), unit = "dB",
+                    min = -40f, max = 0f, format = { v -> String.format("%.1f", v) },
+                    onValueChange = params[0].second, accent = color
+                )
+                EditableParam(
+                    label = "RATIO", value = params[1].first(), unit = ":1",
+                    min = 1f, max = 50f, format = { v -> String.format("%.1f", v) },
+                    onValueChange = params[1].second, accent = color
+                )
+                EditableParam(
+                    label = "ATK", value = params[2].first(), unit = "ms",
+                    min = 0.01f, max = 100f, format = { v -> String.format("%.2f", v) },
+                    onValueChange = params[2].second, accent = color
+                )
+                EditableParam(
+                    label = "REL", value = params[3].first(), unit = "ms",
+                    min = 1f, max = 500f, format = { v -> String.format("%.0f", v) },
+                    onValueChange = params[3].second, accent = color
                 )
             }
         }
@@ -458,21 +520,60 @@ fun LimiterSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF12121A))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Limiter", color = Color(0xFFFFF3B0), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("Limiter", color = Color(0xFFFFF3B0), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Switch(
                 checked = viewModel.limiterEnabled,
                 onCheckedChange = { viewModel.limiterEnabled = it },
                 colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFE17055))
             )
         }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Gráfica del limitador
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF0D0D12))
+                .border(1.dp, Color(0xFF2A2A35), RoundedCornerShape(8.dp))
+        ) {
+            val w = size.width
+            val h = size.height
+            val thresh = viewModel.limiterThreshold
+            val ratio = viewModel.limiterRatio.coerceAtLeast(1f)
+
+            for (i in 0..4) {
+                val y = h * i / 4f
+                drawLine(Color(0xFF2A2A35), Offset(0f, y), Offset(w, y), 1f)
+            }
+
+            val path = Path()
+            for (i in 0..100) {
+                val x = w * i / 100f
+                val input = -30f + 30f * i / 100f
+                val output = if (input < thresh) input
+                else thresh + (input - thresh) / ratio
+                val y = h - ((output + 30f) / 30f) * h
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, Color(0xFFE17055), style = Stroke(2.5f, cap = StrokeCap.Round))
+
+            // Línea de threshold
+            val ty = h - ((thresh + 30f) / 30f) * h
+            drawLine(Color(0xFFFFF3B0).copy(alpha = 0.5f), Offset(0f, ty), Offset(w, ty), 1.5f)
+        }
+
+        Spacer(Modifier.height(12.dp))
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             EditableParam(
                 label = "THRESH", value = viewModel.limiterThreshold, unit = "dB",
@@ -481,7 +582,7 @@ fun LimiterSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
             )
             EditableParam(
                 label = "ATTACK", value = viewModel.limiterAttack, unit = "ms",
-                min = 0.1f, max = 100f, format = { v -> String.format("%.1f", v) },
+                min = 0.01f, max = 100f, format = { v -> String.format("%.2f", v) },
                 onValueChange = { viewModel.limiterAttack = it }, accent = Color(0xFFE17055)
             )
             EditableParam(
@@ -491,7 +592,7 @@ fun LimiterSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
             )
             EditableParam(
                 label = "RATIO", value = viewModel.limiterRatio, unit = ":1",
-                min = 1f, max = 20f, format = { v -> String.format("%.1f", v) },
+                min = 1f, max = 50f, format = { v -> String.format("%.1f", v) },
                 onValueChange = { viewModel.limiterRatio = it }, accent = Color(0xFFE17055)
             )
             EditableParam(
@@ -500,11 +601,12 @@ fun LimiterSection(viewModel: EqViewModel, modifier: Modifier = Modifier) {
                 onValueChange = { viewModel.limiterPostGain = it }, accent = Color(0xFFE17055)
             )
         }
+
         Text(
             "Limiter nativo DynamicsProcessing",
             color = Color(0xFF666677),
-            fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
+            fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
         )
     }
 }
