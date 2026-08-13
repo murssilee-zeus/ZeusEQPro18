@@ -11,21 +11,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import kotlin.math.*
 
-/**
- * Interactive parametric EQ graph inspired by Ableton / professional DAW EQs.
- * Supports drag of bands, spectrum background and filled response curves.
- */
 @Composable
 fun EqGraph(
     bands: List<EqBand>,
@@ -40,7 +34,6 @@ fun EqGraph(
     val minGain = -30f
     val maxGain = 30f
 
-    // Logarithmic frequency mapping
     fun freqToX(freq: Float, width: Float): Float {
         val logMin = ln(minFreq)
         val logMax = ln(maxFreq)
@@ -65,7 +58,6 @@ fun EqGraph(
         return maxGain - (y / height) * range
     }
 
-    // Pre-compute combined response curve points
     val responsePoints = remember(bands) {
         val points = 300
         FloatArray(points) { i ->
@@ -88,7 +80,6 @@ fun EqGraph(
                 .fillMaxSize()
                 .pointerInput(bands, selectedIndex) {
                     detectTapGestures { offset ->
-                        // Select closest band
                         var closest = -1
                         var minDist = Float.MAX_VALUE
                         bands.forEachIndexed { idx, band ->
@@ -115,24 +106,19 @@ fun EqGraph(
             val w = size.width
             val h = size.height
 
-            // Background grid
             val gridColor = Color(0xFF2A2A35)
-            // Horizontal lines (dB)
             for (db in -30..30 step 6) {
                 val y = gainToY(db.toFloat(), h)
                 drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
             }
-            // Vertical lines (frequency decades)
             listOf(10f, 20f, 50f, 100f, 200f, 500f, 1000f, 2000f, 5000f, 10000f, 20000f).forEach { f ->
                 val x = freqToX(f, w)
                 drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
             }
 
-            // 0 dB line stronger
             val zeroY = gainToY(0f, h)
             drawLine(Color(0xFF4A4A5A), Offset(0f, zeroY), Offset(w, zeroY), strokeWidth = 1.5f)
 
-            // Spectrum analyzer background (filled)
             if (spectrum.isNotEmpty()) {
                 val spectrumPath = Path()
                 spectrumPath.moveTo(0f, h)
@@ -140,7 +126,7 @@ fun EqGraph(
                 spectrum.forEachIndexed { i, mag ->
                     val x = i * step
                     val y = h - mag * h * 0.85f
-                    if (i == 0) spectrumPath.lineTo(x, y) else spectrumPath.lineTo(x, y)
+                    spectrumPath.lineTo(x, y)
                 }
                 spectrumPath.lineTo(w, h)
                 spectrumPath.close()
@@ -152,7 +138,6 @@ fun EqGraph(
                 )
             }
 
-            // Individual band response curves (filled under)
             bands.forEachIndexed { idx, band ->
                 if (!band.enabled) return@forEachIndexed
                 val path = Path()
@@ -186,7 +171,6 @@ fun EqGraph(
                 )
             }
 
-            // Combined response curve (white/yellow strong line)
             val combinedPath = Path()
             val n = responsePoints.size
             for (i in 0 until n) {
@@ -201,24 +185,20 @@ fun EqGraph(
                 style = Stroke(width = 2.5f, cap = StrokeCap.Round)
             )
 
-            // Band handles (circles)
             bands.forEachIndexed { idx, band ->
                 val x = freqToX(band.frequency, w)
                 val y = gainToY(band.gain, h)
                 val radius = if (idx == selectedIndex) 14f else 10f
-                // Outer glow
                 drawCircle(
                     band.color.copy(alpha = 0.3f),
                     radius = radius + 6f,
                     center = Offset(x, y)
                 )
-                // Main circle
                 drawCircle(
                     color = if (band.enabled) band.color else Color.Gray,
                     radius = radius,
                     center = Offset(x, y)
                 )
-                // Inner white
                 drawCircle(
                     Color.White.copy(alpha = 0.9f),
                     radius = radius * 0.35f,
@@ -229,12 +209,9 @@ fun EqGraph(
     }
 }
 
-/**
- * Approximate magnitude response of a peaking / shelf filter (in dB).
- * Simplified biquad-like response for visualization.
- */
 fun calculateBandResponse(freq: Hz, band: EqBand): Float {
     if (!band.enabled || band.gain == 0f) return 0f
+    if (band.filterType == EqBand.FilterType.BYPASS) return 0f
 
     val f0 = band.frequency
     val gainDb = band.gain
@@ -245,11 +222,6 @@ fun calculateBandResponse(freq: Hz, band: EqBand): Float {
 
     return when (band.filterType) {
         EqBand.FilterType.PEAK, EqBand.FilterType.BAND_PASS -> {
-            // Peaking EQ approximation
-            val num = w2 - 1
-            val denom = (w / q) 
-            val mag = gainDb * (1f / (1f + (num / (denom + 0.001f)).pow(2)))
-            // Better approximation using resonance
             val bw = 1f / q
             val factor = exp(-((ln(w)).pow(2)) / (2 * bw * bw))
             gainDb * factor
@@ -275,6 +247,7 @@ fun calculateBandResponse(freq: Hz, band: EqBand): Float {
             val factor = exp(-((ln(w)).pow(2)) / (2 * bw * bw))
             -gainDb.absoluteValue * factor * 2f
         }
+        EqBand.FilterType.BYPASS -> 0f
     }.coerceIn(-30f, 30f)
 }
 
