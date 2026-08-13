@@ -39,6 +39,23 @@ class EqViewModel : ViewModel() {
     var limiterRatio by mutableFloatStateOf(12f)
     var limiterPostGain by mutableFloatStateOf(0f)
 
+    // Compresor Multibanda (3 bandas: Low / Mid / High)
+    var mbcEnabled by mutableStateOf(true)
+    var mbcLowThreshold by mutableFloatStateOf(-18f)
+    var mbcLowRatio by mutableFloatStateOf(4f)
+    var mbcLowAttack by mutableFloatStateOf(10f)
+    var mbcLowRelease by mutableFloatStateOf(100f)
+    var mbcMidThreshold by mutableFloatStateOf(-18f)
+    var mbcMidRatio by mutableFloatStateOf(3f)
+    var mbcMidAttack by mutableFloatStateOf(8f)
+    var mbcMidRelease by mutableFloatStateOf(80f)
+    var mbcHighThreshold by mutableFloatStateOf(-20f)
+    var mbcHighRatio by mutableFloatStateOf(2.5f)
+    var mbcHighAttack by mutableFloatStateOf(5f)
+    var mbcHighRelease by mutableFloatStateOf(60f)
+    var mbcLowFreq by mutableFloatStateOf(200f)
+    var mbcHighFreq by mutableFloatStateOf(4000f)
+
     var crossoverFrequencies = mutableStateListOf(200f, 2000f, 8000f)
 
     var isEngineRunning by mutableStateOf(false)
@@ -68,11 +85,9 @@ class EqViewModel : ViewModel() {
         )
     }
 
-    /** Agrega una banda nueva (máximo 18) */
     fun addBand() {
         if (bands.size >= MAX_BANDS) return
         val newId = (bands.maxOfOrNull { it.id } ?: -1) + 1
-        // Frecuencia por defecto: interpolar entre existentes o 1 kHz
         val newFreq = when {
             bands.isEmpty() -> 1000f
             else -> {
@@ -84,7 +99,6 @@ class EqViewModel : ViewModel() {
         selectedBandIndex = bands.lastIndex
     }
 
-    /** Quita la banda seleccionada (mínimo 1) */
     fun removeSelectedBand() {
         if (bands.size <= 1) return
         val idx = selectedBandIndex
@@ -111,7 +125,7 @@ class EqViewModel : ViewModel() {
 
     fun sectionTitle(): String = when (currentSection) {
         EqSection.EQUALIZER -> "Equalizer Pro18"
-        EqSection.CROSSOVER -> "Crossover Multiband"
+        EqSection.CROSSOVER -> "Compresor Multibanda"
         EqSection.LIMITER -> "Limiter"
     }
 
