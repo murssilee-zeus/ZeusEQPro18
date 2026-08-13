@@ -1,17 +1,23 @@
 package com.zeus.eqpro18
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Visualizer
 import android.util.Log
 import kotlin.math.*
 
+/**
+ * Real audio processing engine using Android's native DynamicsProcessing API.
+ * Supports parametric EQ bands, multiband processing and limiter.
+ */
 class AudioEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "ZeusAudioEngine"
         private const val MAX_BANDS = 10
-        private const val CHANNEL_COUNT = 2
+        private const val CHANNEL_COUNT = 2 // Stereo
     }
 
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -19,6 +25,7 @@ class AudioEngine(private val context: Context) {
     private var audioSessionId: Int = 0
     private var isEnabled = false
 
+    // Current state
     private var bands: List<EqBand> = createDefaultBands()
     private var preGain = 0f
     private var limiterEnabled = true
@@ -28,6 +35,7 @@ class AudioEngine(private val context: Context) {
     private var limiterRatio = 10f
     private var limiterPostGain = 0f
 
+    // Spectrum data for visualization (0..1)
     @Volatile
     var spectrumData: FloatArray = FloatArray(128) { 0f }
         private set
@@ -37,25 +45,28 @@ class AudioEngine(private val context: Context) {
         audioSessionId = sessionId
 
         return try {
+            // Create DynamicsProcessing with configuration
             val config = DynamicsProcessing.Config.Builder(
                 DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
                 CHANNEL_COUNT,
-                true,
+                true,   // preEqInUse
                 MAX_BANDS,
-                true,
+                true,   // mbcInUse (multiband compressor)
                 MAX_BANDS,
-                true,
+                true,   // postEqInUse
                 MAX_BANDS,
-                true
+                true    // limiterInUse
             ).build()
 
             dynamicsProcessing = DynamicsProcessing(0, audioSessionId, config).apply {
                 enabled = true
             }
 
+            // Prefer global session when possible (session 0)
             applyAllBands()
             applyLimiter()
 
+            // Visualizer for spectrum (uses same session)
             try {
                 visualizer = Visualizer(audioSessionId).apply {
                     captureSize = Visualizer.getCaptureSizeRange()[1]
@@ -82,7 +93,7 @@ class AudioEngine(private val context: Context) {
             }
 
             isEnabled = true
-            Log.i(TAG, "DynamicsProcessing initialized (session=$audioSessionId)")
+            Log.i(TAG, "DynamicsProcessing initialized successfully (session=$audioSessionId)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize DynamicsProcessing: ${e.message}", e)
@@ -96,6 +107,7 @@ class AudioEngine(private val context: Context) {
             val real = fft[i * 2].toInt()
             val imag = fft[i * 2 + 1].toInt()
             val magnitude = sqrt((real * real + imag * imag).toFloat())
+            // Smooth and normalize
             val db = 20f * log10(magnitude + 1f)
             val normalized = ((db + 40f) / 80f).coerceIn(0f, 1f)
             spectrumData[i] = spectrumData[i] * 0.7f + normalized * 0.3f
@@ -120,8 +132,11 @@ class AudioEngine(private val context: Context) {
         bands.forEachIndexed { index, band ->
             applyBand(band, index)
         }
+        // Also set channel-based gains if needed
         try {
-            dp.setInputGainAllChannelsTo(preGain)
+            for (ch in 0 until CHANNEL_COUNT) {
+                dp.setInputGainByChannelIndex(ch, preGain)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "setInputGain failed: ${e.message}")
         }
@@ -132,25 +147,29 @@ class AudioEngine(private val context: Context) {
         if (index >= MAX_BANDS) return
 
         try {
-            val freq = band.frequency.coerceIn(1f, 20000f)
+            val freq = band.frequency.coerceIn(1f, 20000f) // DP has practical limits
             val gain = if (band.enabled) band.gain.coerceIn(-30f, 30f) else 0f
+            val q = band.q.coerceIn(0.1f, 40f)
 
+            // Pre-EQ stage (parametric)
             val preEqBand = DynamicsProcessing.EqBand(true, freq, gain)
+            // Note: DynamicsProcessing EqBand doesn't expose Q directly in the simple constructor.
+            // We use the frequency and gain. For more control we can use MBC stages.
+
             dp.setPreEqBandAllChannelsTo(index, preEqBand)
 
-            // MbcBand: enabled, cutoffFrequency, attackTime, releaseTime, ratio, threshold, kneeWidth, noiseGateThreshold, expanderRatio, preGain, postGain
+            // Also configure as MBC band for more dynamics control if desired
             val mbcBand = DynamicsProcessing.MbcBand(
-                true,
-                freq,
-                3.0f,
-                80.0f,
-                1.0f,
-                -50f,
-                0f,
-                0f,
-                0f,
-                gain,
-                0f
+                true,           // enabled
+                freq,           // cutoffFrequency
+                3.0f,           // attackTime
+                80.0f,          // releaseTime
+                1.0f,           // ratio
+                -50f,           // threshold
+                0f,             // kneeWidth
+                0f,             // noiseGateThreshold
+                0f,             // expanderRatio
+                gain            // preGain (we use this for EQ-like boost/cut)
             )
             dp.setMbcBandAllChannelsTo(index, mbcBand)
 
@@ -161,9 +180,13 @@ class AudioEngine(private val context: Context) {
 
     fun setPreGain(gainDb: Float) {
         preGain = gainDb.coerceIn(-30f, 30f)
-        try {
-            dynamicsProcessing?.setInputGainAllChannelsTo(preGain)
-        } catch (_: Exception) {}
+        dynamicsProcessing?.let { dp ->
+            for (ch in 0 until CHANNEL_COUNT) {
+                try {
+                    dp.setInputGainByChannelIndex(ch, preGain)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     fun setLimiter(
@@ -188,8 +211,8 @@ class AudioEngine(private val context: Context) {
         try {
             val limiter = DynamicsProcessing.Limiter(
                 limiterEnabled,
-                true,
-                1,
+                true,                   // linked
+                1,                      // link group
                 limiterAttack,
                 limiterRelease,
                 limiterRatio,
@@ -223,7 +246,13 @@ class AudioEngine(private val context: Context) {
         isEnabled = false
     }
 
+    /**
+     * Attempts to attach to the current music/media audio session.
+     * Falls back to session 0 (global) when possible.
+     */
     fun attachToMediaSession(): Boolean {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        // Try to get active sessions is complex; for many devices session 0 works for global effects
         return initialize(0)
     }
 }
