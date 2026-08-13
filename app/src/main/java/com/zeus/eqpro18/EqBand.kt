@@ -12,7 +12,7 @@ data class EqBand(
     val color: Color
 ) {
     enum class FilterType {
-        LOW_SHELF, HIGH_SHELF, PEAK, LOW_PASS, HIGH_PASS, NOTCH, BAND_PASS
+        LOW_SHELF, HIGH_SHELF, PEAK, LOW_PASS, HIGH_PASS, NOTCH, BAND_PASS, BYPASS
     }
 
     fun copyValuesFrom(other: EqBand) {
@@ -24,30 +24,38 @@ data class EqBand(
     }
 }
 
-fun createDefaultBands(): List<EqBand> {
-    val colors = listOf(
-        Color(0xFFFF6B6B),
-        Color(0xFFFF9F43),
-        Color(0xFFFFEAA7),
-        Color(0xFF55EFC4),
-        Color(0xFF74B9FF),
-        Color(0xFFA29BFE),
-        Color(0xFFFD79A8),
-        Color(0xFF00CEC9),
-        Color(0xFFE17055),
-        Color(0xFF6C5CE7)
-    )
+private val BAND_COLORS = listOf(
+    Color(0xFFFF6B6B),
+    Color(0xFFFF9F43),
+    Color(0xFFFFEAA7),
+    Color(0xFF55EFC4),
+    Color(0xFF74B9FF),
+    Color(0xFFA29BFE),
+    Color(0xFFFD79A8),
+    Color(0xFF00CEC9),
+    Color(0xFFE17055),
+    Color(0xFF6C5CE7),
+    Color(0xFFFF7675),
+    Color(0xFFFDCB6E),
+    Color(0xFF00B894),
+    Color(0xFF0984E3),
+    Color(0xFF6C5CE7),
+    Color(0xFFE84393),
+    Color(0xFF2D3436),
+    Color(0xFFD63031)
+)
 
+fun createDefaultBands(): List<EqBand> {
     val defaults = listOf(
-        Triple(30f, 0f, 0.7f),
-        Triple(80f, 0f, 1.2f),
-        Triple(200f, 0f, 1.5f),
+        Triple(31f, 0f, 0.7f),
+        Triple(62f, 0f, 1.0f),
+        Triple(125f, 0f, 1.2f),
+        Triple(250f, 0f, 1.0f),
         Triple(500f, 0f, 1.0f),
         Triple(1000f, 0f, 1.0f),
         Triple(2000f, 0f, 1.2f),
         Triple(4000f, 0f, 1.5f),
         Triple(8000f, 0f, 1.0f),
-        Triple(12000f, 0f, 0.7f),
         Triple(16000f, 0f, 0.8f)
     )
 
@@ -63,7 +71,19 @@ fun createDefaultBands(): List<EqBand> {
                 9 -> EqBand.FilterType.HIGH_SHELF
                 else -> EqBand.FilterType.PEAK
             },
-            color = colors[index % colors.size]
+            color = BAND_COLORS[index % BAND_COLORS.size]
         )
     }
+}
+
+fun createNewBand(id: Int, frequency: Float = 1000f): EqBand {
+    return EqBand(
+        id = id,
+        frequency = frequency.coerceIn(1f, 30000f),
+        gain = 0f,
+        q = 1.0f,
+        enabled = true,
+        filterType = EqBand.FilterType.PEAK,
+        color = BAND_COLORS[id % BAND_COLORS.size]
+    )
 }
