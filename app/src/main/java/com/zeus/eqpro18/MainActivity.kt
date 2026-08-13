@@ -71,6 +71,10 @@ class MainActivity : ComponentActivity() {
                 audioService?.audioEngine?.setBands(viewModel.bands.toList())
             }
 
+            LaunchedEffect(viewModel.preamp) {
+                audioService?.audioEngine?.setPreGain(viewModel.preamp)
+            }
+
             LaunchedEffect(
                 viewModel.limiterEnabled,
                 viewModel.limiterThreshold,
@@ -95,9 +99,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 MainScreen(
                     viewModel = viewModel,
-                    onToggleEngine = {
-                        toggleEngine(viewModel)
-                    }
+                    onToggleEngine = { toggleEngine(viewModel) }
                 )
             }
         }
@@ -133,7 +135,6 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
         val toRequest = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
